@@ -1,90 +1,149 @@
-# eda_main_plots.py
-import pandas as pd
+import os
+from io import StringIO
+import math
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
+from mpl_toolkits.mplot3d import Axes3D
 
-sns.set_theme(style="whitegrid", context="notebook", rc={"figure.dpi": 150})
+INPUT_CSV = r"D:\coding\ptit\btl_data_science\BTL_khdl_bai2\data\du_lieu_oto.csv"
+OUT_DIR = "./plots_main"
+CLEANED_PATH = "./cleaned_car_data.csv"
 
-# config 
-CSV_PATH = "du_lieu_oto_scaled.csv"
-OUTPUT_DIR = Path("plots_main")
-OUTPUT_DIR.mkdir(exist_ok=True)
+os.makedirs(OUT_DIR, exist_ok=True)
 
-# Load Data
-df = pd.read_csv(CSV_PATH)
-if 'Ngày đăng' in df.columns:
-    df['Ngày đăng'] = pd.to_datetime(df['Ngày đăng'], errors='coerce')
+def extract_khuvuc(dia_diem):
+    if pd.isna(dia_diem):
+        return None
+    s = str(dia_diem)
+    for marker in ["Quận", "Huyện", "Thị xã", "Xã", "Phường"]:
+        if marker in s:
+            start = s.find(marker)
+            rest = s[start:]
+            parts = rest.split(",")
+            return parts[0].strip()
+    return s.split(",")[0].strip()
 
-# Detect columns
-numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-categorical_cols = [c for c in df.columns if c not in numeric_cols and not np.issubdtype(df[c].dtype, np.datetime64)]
-print("Numeric:", numeric_cols)
-print("Categorical:", categorical_cols)
+def simple_kde(xs, data, bw):
+    data = np.asarray(data)
+    factor = 1.0 / (bw * math.sqrt(2 * math.pi))
+    return np.array([np.mean(factor * np.exp(-0.5 * ((x - data) / bw) ** 2)) for x in xs])
 
-# Phân bố giá (Histogram + Boxplot)
-if 'Giá' in df.columns:
-    fig, axs = plt.subplots(1, 2, figsize=(10,4))
-    sns.histplot(df['Giá'].dropna(), kde=True, ax=axs[0])
-    axs[0].axvline(0, color='gray', linestyle='--')
-    axs[0].set_title("Phân bố Giá (chuẩn hóa, 0 = trung bình)")
-    sns.boxplot(x=df['Giá'], ax=axs[1])
-    axs[1].axvline(0, color='gray', linestyle='--')
-    axs[1].set_title("Boxplot Giá (chuẩn hóa)")
-    fig.tight_layout()
-    fig.savefig(OUTPUT_DIR / "gia_distribution.png", dpi=150)
-    plt.close(fig)
+def load_and_clean(path):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"INPUT_CSV not found: {path}")
+    df = pd.read_csv(path, parse_dates=["Ngày đăng"], dayfirst=False)
+    df['Năm SX'] = pd.to_numeric(df.get('Năm SX'), errors='coerce')
+    df['Số km đã đi'] = pd.to_numeric(df.get('Số km đã đi'), errors='coerce')
+    df['Giá'] = pd.to_numeric(df.get('Giá'), errors='coerce')
+    df['Khu vực'] = df['Địa điểm'].apply(extract_khuvuc)
+    return df
 
-# Heatmap tương quan
-if len(numeric_cols) >= 2:
-    corr = df[numeric_cols].corr()
-    plt.figure(figsize=(7,5))
-    sns.heatmap(corr, annot=True, cmap="coolwarm", center=0)
-    plt.title("Ma trận tương quan (dữ liệu đã co giãn)")
+def plot_line_mean_price_by_year(df, out_dir):
+    g = df.groupby('Năm SX')['Giá'].agg(['mean','count','std']).reset_index().dropna()
+    plt.figure(figsize=(10,5))
+    plt.plot(g['Năm SX'], g['mean'], marker='o')
+    plt.title('Giá trung bình theo Năm SX')
+    plt.xlabel('Năm sản xuất')
+    plt.ylabel('Giá trung bình (VND)')
+    plt.grid(True)
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "corr_heatmap.png", dpi=150)
+    plt.savefig(os.path.join(out_dir, "line_mean_price_by_year.png"), dpi=200)
+    plt.close()
+    return g
+
+def plot_scatter_price_vs_km(df, out_dir):
+    year_vals = df['Năm SX'].fillna(df['Năm SX'].median())
+    sizes = (year_vals - year_vals.min()).fillna(0) * 2 + 20
+    plt.figure(figsize=(9,6))
+    plt.scatter(df['Số km đã đi'], df['Giá'], s=sizes)
+    plt.title('Giá vs Số km đã đi')
+    plt.xlabel('Số km đã đi')
+    plt.ylabel('Giá (VND)')
+    plt.ylim(bottom=0)
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "scatter_price_vs_km.png"), dpi=200)
     plt.close()
 
-# Scatter: Năm SX vs Giá
-if all(col in df.columns for col in ['Năm SX','Giá']):
-    plt.figure(figsize=(6,5))
-    sns.regplot(x='Năm SX', y='Giá', data=df, scatter_kws={'alpha':0.6}, line_kws={'color':'red'})
-    plt.axvline(0, color='gray', linestyle='--')
-    plt.axhline(0, color='gray', linestyle='--')
-    plt.title("Tương quan Năm SX vs Giá (dữ liệu đã co giãn)")
-    plt.xlabel("Năm SX (Z-score / scaled)")
-    plt.ylabel("Giá (Z-score / scaled)")
+def plot_errorbar_mean_price_by_year(g, out_dir):
+    valid = g[g['count'] >= 2]
+    plt.figure(figsize=(10,5))
+    plt.errorbar(valid['Năm SX'], valid['mean'], yerr=valid['std'], marker='o', linestyle='-')
+    plt.title('Giá trung bình theo Năm SX với thanh lỗi (std)')
+    plt.xlabel('Năm sản xuất')
+    plt.ylabel('Giá (VND)')
+    plt.grid(True)
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "scatter_namsx_gia.png", dpi=150)
+    plt.savefig(os.path.join(out_dir, "errorbar_mean_price_by_year.png"), dpi=200)
     plt.close()
 
-# Scatter: Số km đã đi vs Giá
-if all(col in df.columns for col in ['Số km đã đi','Giá']):
-    plt.figure(figsize=(6,5))
-    sns.regplot(x='Số km đã đi', y='Giá', data=df, scatter_kws={'alpha':0.6}, line_kws={'color':'red'})
-    plt.axvline(0, color='gray', linestyle='--')
-    plt.axhline(0, color='gray', linestyle='--')
-    plt.title("Tương quan Số km đã đi vs Giá (dữ liệu đã co giãn)")
-    plt.xlabel("Số km đã đi (Z-score / scaled)")
-    plt.ylabel("Giá (Z-score / scaled)")
+def plot_contour_price_km_year(df, out_dir):
+    cont_df = df[['Số km đã đi','Năm SX','Giá']].dropna()
+    if len(cont_df) >= 10 and cont_df['Số km đã đi'].nunique() >= 5:
+        plt.figure(figsize=(9,6))
+        plt.tricontourf(cont_df['Số km đã đi'], cont_df['Năm SX'], cont_df['Giá'], levels=12)
+        plt.title('Contour of Giá over (Số km, Năm SX)')
+        plt.xlabel('Số km đã đi')
+        plt.ylabel('Năm SX')
+        cbar = plt.colorbar()
+        cbar.set_label('Giá (VND)')
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, "contour_price_km_year.png"), dpi=200)
+        plt.close()
+    else:
+        print("Contour skipped: not enough diverse points (need >=10 records and varied km).")
+
+def plot_histogram_price_kde(df, out_dir):
+    prices = df['Giá'].dropna().values
+    plt.figure(figsize=(9,5))
+    plt.hist(prices, bins=20, density=True, alpha=0.7)
+    if len(prices) > 1:
+        std_p = prices.std()
+        bw = 1.06 * std_p * (len(prices) ** (-1/5))
+        xs = np.linspace(prices.min(), prices.max(), 300)
+        ys = simple_kde(xs, prices, bw)
+        plt.plot(xs, ys)
+    plt.title('Histogram of Giá (density) with KDE estimate')
+    plt.xlabel('Giá (VND)')
+    plt.ylabel('Density')
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "scatter_km_gia.png", dpi=150)
+    plt.savefig(os.path.join(out_dir, "histogram_price_kde.png"), dpi=200)
     plt.close()
 
-# Barplot: Giá trung bình theo Xuất xứ
-if all(col in df.columns for col in ['Xuất xứ','Giá']):
-    plt.figure(figsize=(8,4))
-    avg = df.groupby('Xuất xứ')['Giá'].mean().sort_values(ascending=False).reset_index()
-    sns.barplot(data=avg, x='Xuất xứ', y='Giá')
-    plt.axhline(0, color='gray', linestyle='--')
-    plt.title("Giá trung bình theo Xuất xứ (đã co giãn)")
-    plt.xlabel("Xuất xứ")
-    plt.ylabel("Giá (Z-score / scaled)")
+def plot_3d_scatter(df, out_dir):
+    fig = plt.figure(figsize=(9,7))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(df['Năm SX'], df['Số km đã đi'], df['Giá'], s=20)
+    ax.set_xlabel('Năm SX')
+    ax.set_ylabel('Số km đã đi')
+    ax.set_zlabel('Giá (VND)')
+    ax.set_title('3D scatter: Năm SX vs Số km vs Giá')
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "3d_scatter_year_km_price.png"), dpi=200)
+    plt.close()
+
+def plot_bar_count_by_khuvuc(df, out_dir):
+    counts = df['Khu vực'].value_counts().nlargest(15)
+    plt.figure(figsize=(11,6))
+    counts.plot(kind='bar')
+    plt.title('Số lượng tin theo Khu vực (heuristic từ Địa điểm)')
+    plt.xlabel('Khu vực')
+    plt.ylabel('Số tin')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "bar_xuatxu_gia.png", dpi=150)
+    plt.savefig(os.path.join(out_dir, "bar_count_by_khuvuc.png"), dpi=200)
     plt.close()
 
+def main():
+    df = load_and_clean(INPUT_CSV)
+    g = plot_line_mean_price_by_year(df, OUT_DIR)
+    plot_scatter_price_vs_km(df, OUT_DIR)
+    plot_errorbar_mean_price_by_year(g, OUT_DIR)
+    plot_contour_price_km_year(df, OUT_DIR)
+    plot_histogram_price_kde(df, OUT_DIR)
+    plot_3d_scatter(df, OUT_DIR)
+    plot_bar_count_by_khuvuc(df, OUT_DIR)
+    print("Plots saved to:", os.path.abspath(OUT_DIR))
 
-print("Đã lưu các biểu đồ chính trong thư mục:", OUTPUT_DIR.resolve())
+if __name__ == "__main__":
+    main()

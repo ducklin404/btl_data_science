@@ -4,8 +4,13 @@ from mpl_toolkits.mplot3d import Axes3D
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
+import os
+
+dir_path = os.path.dirname(__file__)
+
+
 # 1. Đọc dữ liệu gốc
-df = pd.read_csv("du_lieu_oto.csv")
+df = pd.read_csv(dir_path + os.sep + "data" + os.sep + "du_lieu_oto.csv")
 
 # Các cột numeric để phân cụm
 features = ["Giá", "Năm SX", "Số km đã đi"]

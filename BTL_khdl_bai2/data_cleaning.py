@@ -1,7 +1,13 @@
 import pandas as pd
+import os
+
+dir_path = os.path.dirname(__file__)
+
+output_folder = dir_path + os.sep + "data"
+output_path = output_folder + os.sep + "du_lieu_oto.csv"
 
 # Đọc dữ liệu gốc
-df = pd.read_csv("oto_chitiet.csv")
+df = pd.read_csv( output_folder + os.sep + "oto_chitiet.csv")
 
 # ===== Xử lý dữ liệu thiếu =====
 # Nếu "Tình trạng" là "Mới" và "Số km đã đi" rỗng thì gán 0
@@ -53,4 +59,4 @@ after_price_rows = len(df)
 print("Số hàng bị xoá do ngoại lai ở Giá:", after_km_rows - after_price_rows)
 
 # ===== Xuất dữ liệu đã xử lý =====
-df.to_csv("du_lieu_oto.csv", index=False, header=True, encoding="utf-8-sig")
+df.to_csv(output_path, index=False, header=True, encoding="utf-8-sig")

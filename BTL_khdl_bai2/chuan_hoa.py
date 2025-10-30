@@ -1,9 +1,13 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+import os
+dir_path = os.path.dirname(__file__)
 
+output_folder = dir_path + os.sep + "data"
+output_path = output_folder + os.sep + "du_lieu_oto_scaled.csv"
 # 1. Đọc dữ liệu gốc
-df = pd.read_csv("du_lieu_oto.csv")
+df = pd.read_csv(output_folder + os.sep + "du_lieu_oto.csv")
 
 # 2. Chọn các cột số cần chuẩn hóa
 numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -24,6 +28,6 @@ df_scaled[numeric_cols] = scaler.fit_transform(df[numeric_cols])
 # Nếu muốn thử loại khác thì thay scaler = MinMaxScaler() hoặc RobustScaler()
 
 # 4. Lưu ra file mới
-df_scaled.to_csv("du_lieu_oto_scaled.csv", index=False, encoding="utf-8-sig")
+df_scaled.to_csv(output_path, index=False, encoding="utf-8-sig")
 
 print("Đã chuẩn hóa xong. File mới lưu tại: du_lieu_oto_scaled.csv")

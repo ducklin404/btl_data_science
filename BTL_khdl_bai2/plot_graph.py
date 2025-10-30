@@ -6,7 +6,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-INPUT_CSV = r"D:\coding\ptit\btl_data_science\BTL_khdl_bai2\data\du_lieu_oto.csv"
+dir_path = os.path.dirname(__file__)
+
+output_folder = dir_path + os.sep + "data"
+INPUT_CSV = output_folder + os.sep + "du_lieu_oto.csv"
 OUT_DIR = "./plots_main"
 CLEANED_PATH = "./cleaned_car_data.csv"
 

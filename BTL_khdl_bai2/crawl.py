@@ -3,6 +3,12 @@ import asyncio
 import pandas as pd
 import datetime
 import time
+import os
+
+dir_path = os.path.dirname(__file__)
+
+output_folder = dir_path + os.sep + "data"
+output_path = output_folder + os.sep + "oto_chitiet.csv"
 
 # Cấu hình
 url_list = "https://gateway.chotot.com/v1/public/ad-listing"
@@ -113,7 +119,7 @@ async def main():
             if len(list_ids) >= max_ads:
                 break
 
-        print(f"🔎 Thu được {len(list_ids)} ID tin")
+        print(f"Thu được {len(list_ids)} ID tin")
 
         records = []
         sem = asyncio.Semaphore(concurrency)
@@ -130,7 +136,7 @@ async def main():
             await asyncio.sleep(pause_time)  # nghỉ sau mỗi batch
 
         df = pd.DataFrame(records).drop_duplicates()
-        df.to_csv("oto_chitiet.csv", index=False, encoding="utf-8-sig")
+        df.to_csv(output_path, index=False, encoding="utf-8-sig")
         print(f"Đã lưu {len(df)} tin vào oto_chitiet.csv")
 
 
